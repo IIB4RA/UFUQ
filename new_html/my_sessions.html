@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>My Sessions - SkillSwap</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#3B82F6", "primary-hover": "#2563EB", "secondary": "#10B981",
+              "background-light": "#FAFAFA", "background-dark": "#111827",
+              "surface-light": "#FFFFFF", "surface-dark": "#1F2937",
+              "text-light": "#1F2937", "text-muted-light": "#6B7280",
+              "text-dark": "#F9FAFB", "text-muted-dark": "#9CA3AF",
+            },
+            fontFamily: { "sans": ["Plus Jakarta Sans", "sans-serif"] }
+          },
+        },
+      }
+    </script>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark font-sans antialiased h-screen flex overflow-hidden">
+
+    <aside class="w-64 bg-surface-light dark:bg-surface-dark border-r border-gray-200 dark:border-gray-800 flex flex-col hidden md:flex z-20">
+        <div class="h-16 flex items-center px-6 border-b border-gray-200 dark:border-gray-800 cursor-pointer" onclick="window.location.href='landing_page.html'">
+            <div class="flex items-center gap-2 text-primary font-bold text-xl uppercase"><span class="material-symbols-outlined">hub</span> SkillSwap</div>
+        </div>
+        <nav class="flex-1 py-6 px-3 space-y-1 overflow-y-auto">
+            <a href="user_dashboard.html" class="flex items-center gap-3 px-3 py-2.5 text-text-muted-light dark:text-text-muted-dark hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl font-medium transition-colors">
+                <span class="material-symbols-outlined">dashboard</span> Dashboard
+            </a>
+            <a href="my_sessions.html" class="flex items-center gap-3 px-3 py-2.5 bg-primary/10 text-primary rounded-xl font-semibold transition-colors">
+                <span class="material-symbols-outlined filled">calendar_month</span> My Sessions
+            </a>
+            <a href="skill_search.html" class="flex items-center gap-3 px-3 py-2.5 text-text-muted-light dark:text-text-muted-dark hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl font-medium transition-colors">
+                <span class="material-symbols-outlined">search</span> Find Skills
+            </a>
+            <a href="messages.html" class="flex items-center gap-3 px-3 py-2.5 text-text-muted-light dark:text-text-muted-dark hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl font-medium transition-colors">
+                <span class="material-symbols-outlined">chat</span> Messages
+            </a>
+        </nav>
+        <div class="p-4 border-t border-gray-200 dark:border-gray-800">
+             <div class="flex items-center gap-3 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors cursor-pointer" onclick="window.location.href='user_profile.html'">
+                <img id="sidebar-avatar" src="https://i.pravatar.cc/150" class="w-10 h-10 rounded-full object-cover">
+                <div class="flex-1 overflow-hidden">
+                    <p id="sidebar-name" class="text-sm font-bold truncate">Loading...</p>
+                    <p class="text-xs text-gray-500">View Profile</p>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col h-screen overflow-hidden relative">
+        <header class="h-16 flex items-center justify-between px-6 border-b border-gray-200 dark:border-gray-800 bg-surface-light/80 dark:bg-surface-dark/80 backdrop-blur-md z-10">
+            <h2 class="text-xl font-bold">My Sessions</h2>
+            <button id="logout-btn" class="p-2 text-gray-500 hover:text-red-500"><span class="material-symbols-outlined">logout</span></button>
+        </header>
+
+        <div class="flex-1 overflow-y-auto p-6 md:p-8">
+            <div class="max-w-5xl mx-auto">
+                <h1 class="text-3xl font-extrabold mb-6">Manage Sessions</h1>
+                <div class="bg-surface-light dark:bg-surface-dark rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
+                    <div id="bookings-container" class="divide-y divide-gray-100 dark:divide-gray-800">
+                        <div class="p-8 text-center text-gray-500">Loading sessions...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const userId = localStorage.getItem('skillswap_temp_userid');
+            if (!userId) { window.location.href = 'login.html'; return; }
+
+            // Handle Join Logic
+            window.handleJoinSession = async (bookingId, role, teacherId) => {
+                const btn = document.getElementById(`btn-${bookingId}`);
+                const originalContent = btn.innerHTML;
+                try {
+                    btn.innerHTML = `<span class="animate-spin material-symbols-outlined text-[18px]">progress_activity</span>`;
+                    btn.disabled = true;
+
+                    const res = await fetch(`http://127.0.0.1:5000/api/create-session/${bookingId}`, { method: 'POST' });
+                    const data = await res.json();
+
+                    if (data.success) {
+                        // Redirect to the classroom
+                        window.location.href = `live_session.html?room=${bookingId}&role=${role}&teacherId=${teacherId}`;
+                    } else {
+                        alert("Could not start session.");
+                        btn.innerHTML = originalContent;
+                        btn.disabled = false;
+                    }
+                } catch (err) {
+                    alert("Connection Error");
+                    btn.innerHTML = originalContent;
+                    btn.disabled = false;
+                }
+            };
+
+            async function loadBookings() {
+                try {
+                    const res = await fetch(`http://127.0.0.1:5000/api/bookings/user/${userId}`);
+                    const bookings = await res.json();
+                    
+                    const userRes = await fetch(`http://127.0.0.1:5000/api/users/${userId}`);
+                    const userData = await userRes.json();
+                    document.getElementById('sidebar-name').innerText = userData.fullName;
+                    if(userData.profilePicture) document.getElementById('sidebar-avatar').src = userData.profilePicture;
+
+                    const container = document.getElementById('bookings-container');
+                    container.innerHTML = bookings.length ? '' : '<p class="p-8 text-center text-gray-400 font-medium">No sessions found.</p>';
+
+                    const now = new Date();
+
+                    bookings.forEach(b => {
+                        const isTeacher = (b.teacherId === userId);
+                        const otherName = isTeacher ? b.learnerName : b.teacherName;
+                        const role = isTeacher ? 'teacher' : 'learner';
+                        const status = b.status || 'pending';
+
+                        // --- SMART TIME-LOCK LOGIC ---
+                        const sessionTime = new Date(`${b.date} ${b.time}`);
+                        const isTimeReached = now >= sessionTime;
+
+                        let actionArea = '';
+
+                        if (status === 'completed') {
+                            // Point 4: If session is done, show Finished badge
+                            actionArea = `
+                                <div class="px-4 py-2 bg-green-50 dark:bg-green-900/20 text-green-600 rounded-xl text-xs font-black uppercase tracking-widest border border-green-100 dark:border-green-800">
+                                    ✓ Finished
+                                </div>`;
+                        } else if (status === 'confirmed' || status === 'ready') {
+                            // Point 1: Join button with time-lock
+                            actionArea = `
+                                <button onclick="handleJoinSession('${b._id}', '${role}', '${b.teacherId}')" id="btn-${b._id}" 
+                                        ${isTimeReached ? '' : 'disabled'}
+                                        class="px-5 py-2.5 rounded-xl text-white text-sm font-bold flex items-center gap-2 transition-all active:scale-95 
+                                        ${isTimeReached ? 'bg-primary hover:bg-primary-hover shadow-lg shadow-primary/20' : 'bg-gray-300 dark:bg-gray-800 cursor-not-allowed opacity-50'}">
+                                    <span class="material-symbols-outlined text-[18px]">videocam</span> 
+                                    ${isTimeReached ? 'Join Now' : 'Starts at ' + b.time}
+                                </button>`;
+                        } else if (status === 'pending') {
+                            if (isTeacher) {
+                                actionArea = `
+                                    <div class="flex gap-2">
+                                        <button onclick="updateStatus('${b._id}', 'confirm')" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-xl text-sm font-bold transition-colors">Accept</button>
+                                        <button onclick="updateStatus('${b._id}', 'reject')" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl text-sm font-bold transition-colors">Reject</button>
+                                    </div>`;
+                            } else {
+                                actionArea = `<div class="px-4 py-2 bg-gray-50 dark:bg-gray-800/50 text-gray-400 rounded-xl text-[10px] font-black uppercase tracking-widest border border-dashed border-gray-200 dark:border-gray-700">Waiting for Approval</div>`;
+                            }
+                        } else {
+                            actionArea = `<span class="text-gray-400 text-xs font-black uppercase tracking-tighter">${status}</span>`;
+                        }
+
+                        container.innerHTML += `
+                            <div class="p-6 flex items-center justify-between hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
+                                <div class="flex items-center gap-4">
+                                    <div class="w-12 h-12 bg-blue-50 dark:bg-blue-900/20 rounded-2xl flex items-center justify-center text-primary">
+                                        <span class="material-symbols-outlined">school</span>
+                                    </div>
+                                    <div>
+                                        <h3 class="font-bold text-gray-900 dark:text-white">${b.skill}</h3>
+                                        <p class="text-sm text-gray-500 font-medium">${isTeacher ? 'Student' : 'Mentor'}: ${otherName}</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-8">
+                                    <div class="text-right">
+                                        <p class="text-sm font-bold text-gray-700 dark:text-gray-300">${b.date}</p>
+                                        <p class="text-xs text-gray-400 font-medium">${b.time}</p>
+                                    </div>
+                                    <div class="w-44 flex justify-end">
+                                        ${actionArea}
+                                    </div>
+                                </div>
+                            </div>`;
+                    });
+                } catch (err) { console.error(err); }
+            }
+
+            window.updateStatus = async (id, action) => {
+                const res = await fetch(`http://127.0.0.1:5000/api/bookings/${id}/status`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ status: action === 'confirm' ? 'confirmed' : 'rejected' })
+                });
+                if(res.ok) {
+                    alert(action === 'confirm' ? "Session Accepted!" : "Session Rejected.");
+                    loadBookings();
+                }
+            };
+
+            document.getElementById('logout-btn').onclick = () => {
+                if(confirm('Log out?')) { localStorage.clear(); window.location.href = 'login.html'; }
+            };
+
+            loadBookings();
+            // Refresh time check every 30 seconds
+            setInterval(loadBookings, 30000);
+        });
+    </script>
+</body>
+</html>
