@@ -46,14 +46,25 @@ class AIService:
         response = model.generate_content(prompt)
         return response.text
 
-    # --- النقطة 3: مساعد البروفايل (Profile Doctor) ---
-    @staticmethod
-    def generate_bio(name, skills):
-        prompt = f"Create a professional 2-line bio for {name} expert in {skills}. English only."
-        try:
-            response = model.generate_content(prompt)
-            # Add .text to ensure we get the string
-            return response.text.replace('```json', '').replace('```', '').strip()
-        except Exception as e:
-            print(f"Gemini Error: {e}")
-            return "Expert mentor passionate about sharing knowledge."
+
+    # In ai_service.py
+@staticmethod
+def generate_bio(name, skills):
+    # Added instructions for uniqueness and creative variety
+    prompt = f"""
+    Create a unique, professional 2-line bio for a mentor named {name}.
+    Their expertise includes: {skills}.
+    
+    Requirements:
+    - Make it different from common generic bios.
+    - Focus on the specific skills provided.
+    - Professional but engaging tone.
+    - English only.
+    """
+    try:
+        # Use a fresh request every time
+        response = model.generate_content(prompt)
+        return response.text.strip()
+    except Exception as e:
+        print(f"Gemini Error: {e}")
+        return "Expert mentor dedicated to sharing specialized knowledge and helping learners grow."
