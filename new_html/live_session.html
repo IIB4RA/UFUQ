@@ -3,170 +3,116 @@
 <head>
     <meta charset="utf-8"/>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-    <title>Live Classroom - SkillSwap</title>
+    <title>Live Session - SkillSwap</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;700&display=swap" rel="stylesheet"/>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
     <style>
-        body, html { height: 100%; margin: 0; overflow: hidden; background: #000; font-family: 'Plus Jakarta Sans', sans-serif; }
-        #video-container { width: 100%; height: calc(100vh - 64px); }
-        iframe { width: 100%; height: 100%; border: none; }
-        .filled { font-variation-settings: 'FILL' 1; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        iframe { border: none; width: 100%; height: 100%; }
     </style>
 </head>
-<body>
-    <header class="h-16 bg-gray-900 border-b border-gray-800 flex items-center justify-between px-6 text-white shrink-0">
-        <div class="flex items-center gap-2 text-blue-500 font-bold text-xl uppercase tracking-tighter">
-            <span class="material-symbols-outlined">hub</span> SkillSwap Live
-        </div>
-        <div class="flex items-center gap-4">
-            <span id="role-badge" class="px-3 py-1 bg-gray-800 rounded-full text-[10px] font-bold uppercase tracking-widest text-gray-400 border border-gray-700">Connecting...</span>
-            <button onclick="handleLeave()" class="bg-red-600 px-4 py-2 rounded-xl text-sm font-bold hover:bg-red-700 transition-all active:scale-95 shadow-lg shadow-red-900/20">End Session</button>
-        </div>
-    </header>
+<body class="bg-gray-900 h-screen flex flex-col overflow-hidden text-white">
 
-    <div id="video-container">
-        <div id="loading" class="h-full flex flex-col items-center justify-center text-gray-500">
-            <div class="w-10 h-10 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4"></div>
-            <p class="animate-pulse">Joining Classroom...</p>
-        </div>
-    </div>
-
-    <div id="review-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-[32px] w-full max-w-md p-8 shadow-2xl transform transition-all">
-            <div class="text-center">
-                <div class="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <span class="material-symbols-outlined text-amber-600 text-4xl filled">star</span>
-                </div>
-                <h2 class="text-2xl font-black text-gray-900 mb-2">Session Complete!</h2>
-                <p class="text-gray-500 text-sm mb-8 px-4">How was your experience? Your feedback helps the community grow.</p>
-                
-                <div class="flex justify-center gap-3 mb-8" id="star-rating">
-                    <button onclick="setRating(1)" class="star-btn text-gray-300 hover:text-amber-400 transition-colors"><span class="material-symbols-outlined text-4xl">star</span></button>
-                    <button onclick="setRating(2)" class="star-btn text-gray-300 hover:text-amber-400 transition-colors"><span class="material-symbols-outlined text-4xl">star</span></button>
-                    <button onclick="setRating(3)" class="star-btn text-gray-300 hover:text-amber-400 transition-colors"><span class="material-symbols-outlined text-4xl">star</span></button>
-                    <button onclick="setRating(4)" class="star-btn text-gray-300 hover:text-amber-400 transition-colors"><span class="material-symbols-outlined text-4xl">star</span></button>
-                    <button onclick="setRating(5)" class="star-btn text-gray-300 hover:text-amber-400 transition-colors"><span class="material-symbols-outlined text-4xl">star</span></button>
-                </div>
-
-                <textarea id="review-comment" class="w-full rounded-2xl border-gray-100 bg-gray-50 p-4 text-sm mb-8 focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all resize-none" rows="3" placeholder="Describe your experience (optional)..."></textarea>
-
-                <div class="flex flex-col gap-3">
-                    <button onclick="submitReview()" id="submit-review-btn" class="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95">
-                        Submit Review
-                    </button>
-                    <button onclick="window.location.href='user_dashboard.html'" class="text-gray-400 text-xs font-medium hover:text-gray-600">Skip for now</button>
-                </div>
+    <header class="h-16 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-6 z-10 shrink-0">
+        <div class="flex items-center gap-3">
+            <span class="material-symbols-outlined text-red-500 animate-pulse">radio_button_checked</span>
+            <div>
+                <h1 class="font-bold text-lg leading-tight">Live Session</h1>
+                <p id="timer" class="text-xs text-gray-400 font-mono">00:00:00</p>
             </div>
         </div>
-    </div>
+        
+        <button onclick="endSession()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors">
+            <span class="material-symbols-outlined text-[18px]">call_end</span>
+            End Session
+        </button>
+    </header>
+
+    <main class="flex-1 relative bg-black flex justify-center items-center">
+        <div id="loader" class="absolute inset-0 flex flex-col items-center justify-center z-0">
+            <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
+            <p class="text-gray-400 animate-pulse">Connecting to secure room...</p>
+        </div>
+
+        <iframe id="whereby-frame" allow="camera; microphone; fullscreen; speaker; display-capture" class="relative z-10"></iframe>
+    </main>
 
     <script>
-        const urlParams = new URLSearchParams(window.location.search);
-        const bookingId = urlParams.get('room');
-        const role = urlParams.get('role');
-        const teacherId = urlParams.get('teacherId'); 
-        const learnerId = localStorage.getItem('skillswap_temp_userid');
-        
-        let selectedRating = 0;
+        let bookingId = null;
+        let userRole = null;
+        let sessionTimer = null;
 
-        async function initClass() {
+        document.addEventListener('DOMContentLoaded', async () => {
+            // 1. استرجاع البيانات من التخزين المحلي
+            bookingId = localStorage.getItem('current_booking_id');
+            userRole = localStorage.getItem('current_user_role'); // 'teacher' or 'learner'
+
+            // التحقق من وجود البيانات دون الطرد الفوري
             if (!bookingId) {
+                alert("❌ Error: No session ID found. Returning to dashboard.");
                 window.location.href = 'user_dashboard.html';
                 return;
             }
 
+            console.log("🚀 Starting Session:", bookingId, "As:", userRole);
+            await initializeSession();
+            startTimer();
+        });
+
+        async function initializeSession() {
             try {
-                const res = await fetch(`http://127.0.0.1:5000/api/get-meeting-link/${bookingId}?role=${role}`);
+                // 2. طلب إنشاء/تجهيز الغرفة من السيرفر
+                // هذه الخطوة تضمن أن الرابط جاهز في الداتا بيس
+                await fetch(`http://127.0.0.1:5000/api/create-session/${bookingId}`, { method: 'POST' });
+
+                // 3. جلب رابط الغرفة المناسب للدور (المعلم Host، الطالب Guest)
+                const res = await fetch(`http://127.0.0.1:5000/api/get-meeting-link/${bookingId}?role=${userRole}`);
                 const data = await res.json();
 
                 if (data.url) {
-                    document.getElementById('video-container').innerHTML = `
-                        <iframe 
-                            src="${data.url}" 
-                            allow="camera; microphone; fullscreen; speaker; display-capture; autoplay"
-                        ></iframe>`;
-                    document.getElementById('role-badge').innerText = role === 'teacher' ? 'Teacher Mode (Host)' : 'Learner Mode';
+                    // 4. وضع الرابط في الـ iframe
+                    const iframe = document.getElementById('whereby-frame');
+                    iframe.src = data.url;
+                    
+                    // إخفاء اللودر عند تحميل الـ iframe
+                    iframe.onload = () => document.getElementById('loader').style.display = 'none';
                 } else {
-                    document.getElementById('loading').innerHTML = '<p class="text-red-500 font-bold">Error: Session not found.</p>';
+                    alert("⚠️ Room not ready: " + (data.error || "Unknown error"));
+                    // لا نقوم بالطرد هنا، بل نترك المستخدم يرى الخطأ
                 }
+
             } catch (err) {
-                document.getElementById('loading').innerHTML = '<p class="text-red-500 font-bold">Server Offline.</p>';
+                console.error("Session Error:", err);
+                alert("Connection failed. Please check your internet.");
             }
         }
 
-        // --- ENHANCED LEAVE LOGIC ---
-        async function handleLeave() {
-            const confirmMsg = role === 'teacher' 
-                ? "End session for everyone? This will mark the class as Finished." 
-                : "Leave the classroom? You can still rate your mentor.";
-                
-            if (confirm(confirmMsg)) {
-                // Point 4: Mark as completed in DB so "Join" disappears on Dashboard
-                try {
-                    await fetch(`http://127.0.0.1:5000/api/bookings/${bookingId}/status`, {
-                        method: 'PUT',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ status: 'completed' })
-                    });
-                } catch (e) { console.error("Update failed", e); }
+        async function endSession() {
+            if(!confirm("Are you sure you want to end this session?")) return;
 
-                if (role === 'learner') {
-                    document.getElementById('review-modal').classList.remove('hidden');
-                } else {
-                    window.location.href = 'user_dashboard.html';
-                }
-            }
-        }
-
-        // Star Logic
-        function setRating(n) {
-            selectedRating = n;
-            const stars = document.querySelectorAll('#star-rating .star-btn span');
-            stars.forEach((star, index) => {
-                if(index < n) {
-                    star.classList.add('filled');
-                    star.parentElement.classList.add('text-amber-400');
-                } else {
-                    star.classList.remove('filled');
-                    star.parentElement.classList.remove('text-amber-400');
-                    star.parentElement.classList.add('text-gray-300');
-                }
-            });
-        }
-
-        async function submitReview() {
-            if(selectedRating === 0) { alert("Please select a rating."); return; }
-
-            const comment = document.getElementById('review-comment').value;
-            const btn = document.getElementById('submit-review-btn');
-            btn.innerText = "Saving...";
-            btn.disabled = true;
-
+            // إرسال طلب للسيرفر لإنهاء الجلسة وتحديث حالتها إلى completed
             try {
-                const res = await fetch('http://127.0.0.1:5000/api/reviews', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        teacherId: teacherId,
-                        learnerId: learnerId,
-                        rating: selectedRating,
-                        comment: comment
-                    })
+                await fetch(`http://127.0.0.1:5000/api/bookings/${bookingId}/finish`, {
+                    method: 'PUT'
                 });
-                alert("Review submitted!");
-                window.location.href = 'user_dashboard.html';
-            } catch (e) {
-                window.location.href = 'user_dashboard.html';
-            }
+            } catch(e) { console.error(e); }
+
+            // إيقاف العداد والرجوع
+            clearInterval(sessionTimer);
+            window.location.href = 'my_sessions.html';
         }
 
-        // Safety: If they close the tab, try to mark it finished
-        window.addEventListener('beforeunload', () => {
-            navigator.sendBeacon(`http://127.0.0.1:5000/api/bookings/${bookingId}/status`, JSON.stringify({ status: 'completed' }));
-        });
-
-        initClass();
+        function startTimer() {
+            let seconds = 0;
+            sessionTimer = setInterval(() => {
+                seconds++;
+                const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
+                const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
+                const s = (seconds % 60).toString().padStart(2, '0');
+                document.getElementById('timer').innerText = `${h}:${m}:${s}`;
+            }, 1000);
+        }
     </script>
 </body>
 </html>
