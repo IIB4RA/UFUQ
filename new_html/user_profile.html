@@ -82,6 +82,7 @@
 
         <div class="flex-1 overflow-y-auto p-6 md:p-8 lg:p-12 space-y-12">
             <div class="flex flex-col lg:flex-row gap-12 max-w-7xl mx-auto">
+                
                 <aside class="w-full lg:w-96 flex-shrink-0 flex flex-col gap-8">
                     <div class="bg-surface-light dark:bg-surface-dark rounded-[40px] p-8 shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col items-center text-center relative overflow-hidden">
                         <div class="absolute top-0 left-0 w-full h-32 bg-gradient-to-br from-primary/30 via-primary/10 to-transparent"></div>
@@ -113,6 +114,7 @@
                             Tell the community about your expertise.
                         </p>
                     </div>
+
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div>
                             <h3 class="text-xl font-black mb-6 flex items-center gap-3">
@@ -144,28 +146,31 @@
             <form id="edit-form" class="space-y-6">
                 <div>
                     <label class="block text-xs font-black uppercase text-gray-400 mb-2 ml-1">Profile Headline</label>
-                    <input type="text" id="edit-headline" class="w-full rounded-2xl border-gray-100 dark:bg-gray-800 dark:border-gray-700 p-4 outline-none transition-all dark:text-white" placeholder="e.g. Senior Designer">
+                    <input type="text" id="edit-headline" class="w-full rounded-2xl border-gray-100 dark:bg-gray-800 dark:border-gray-700 p-4 outline-none transition-all dark:text-white" placeholder="e.g. Senior Designer & Student">
                 </div>
+
                 <div>
                     <div class="flex justify-between items-center mb-2">
                         <label class="block text-xs font-black uppercase text-gray-400 ml-1">Biography</label>
                         <button type="button" onclick="fixMyBio()" class="ai-glow flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-purple-700 transition-all active:scale-95">
-                            <span class="material-symbols-outlined text-[14px] filled">psychology</span>
+                            <span class="material-symbols-outlined text-[14px] filled">auto_awesome</span>
                             AI Doctor ✨
                         </button>
                     </div>
                     <textarea id="edit-bio" rows="4" class="w-full rounded-2xl border-gray-100 dark:bg-gray-800 dark:border-gray-700 p-4 outline-none transition-all resize-none dark:text-white" placeholder="Tell us about yourself..."></textarea>
                 </div>
+
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <label class="block text-xs font-black uppercase text-gray-400 mb-2 ml-1">Teaching (Skills)</label>
+                        <label class="block text-xs font-black uppercase text-gray-400 mb-2 ml-1">Teaching (Comma separated)</label>
                         <input type="text" id="edit-teach-skills" class="w-full rounded-2xl border-gray-100 dark:bg-gray-800 dark:border-gray-700 p-4 outline-none dark:text-white" placeholder="Python, Cooking, Math">
                     </div>
                     <div>
-                        <label class="block text-xs font-black uppercase text-gray-400 mb-2 ml-1">Learning (Skills)</label>
+                        <label class="block text-xs font-black uppercase text-gray-400 mb-2 ml-1">Learning (Comma separated)</label>
                         <input type="text" id="edit-learn-skills" class="w-full rounded-2xl border-gray-100 dark:bg-gray-800 dark:border-gray-700 p-4 outline-none dark:text-white" placeholder="Piano, Karate">
                     </div>
                 </div>
+
                 <div class="pt-6 flex gap-4">
                     <button type="button" onclick="closeEditModal()" class="flex-1 py-4 font-black text-gray-500">Cancel</button>
                     <button type="submit" class="flex-[2] py-4 bg-primary text-white rounded-3xl font-black shadow-xl hover:scale-[1.02] transition-all">Save Changes</button>
@@ -185,10 +190,13 @@
             profileId = urlParams.get('id') || myId;
 
             if (!myId) { window.location.href = 'login.html'; return; }
+            
+            // Hide edit buttons if viewing someone else's profile
             if (profileId !== myId) {
                 document.getElementById('edit-profile-btn').classList.add('hidden');
                 document.getElementById('photo-upload-btn').classList.add('hidden');
             }
+            
             await loadProfileData(profileId);
         });
 
@@ -198,6 +206,7 @@
                 const user = await res.json();
                 currentUserData = user;
 
+                // Bind Data to UI
                 document.getElementById('profile-name').innerText = user.fullName;
                 document.getElementById('sidebar-name-small').innerText = user.fullName;
                 document.getElementById('profile-headline').innerText = user.headline || "Passionate Skill Swapper";
@@ -212,39 +221,48 @@
             } catch (err) { console.error(err); }
         }
 
-        // IMPROVED AI DOCTOR: Reads current inputs dynamically
+        // ============================================
+        // SMART AI DOCTOR (Context-Aware Version)
+        // ============================================
         async function fixMyBio() {
             const bioArea = document.getElementById('edit-bio');
-            const skills = document.getElementById('edit-teach-skills').value;
+            const teachSkills = document.getElementById('edit-teach-skills').value;
+            const learnSkills = document.getElementById('edit-learn-skills').value; // Sending context
             const headline = document.getElementById('edit-headline').value;
             const name = currentUserData.fullName;
 
-            if (!skills && !headline) {
-                alert("Please add some skills or a headline so the AI knows what you do!");
+            if (!teachSkills && !headline && !learnSkills) {
+                alert("Please add a Headline or Skills first so the AI can help!");
                 return;
             }
 
             const originalText = bioArea.value;
-            bioArea.value = "AI Doctor is writing your new bio... ✨";
+            bioArea.value = "AI Doctor is crafting your professional bio... ✨";
             bioArea.disabled = true;
 
             try {
+                // Sending FULL context to the new updated backend
                 const res = await fetch('http://127.0.0.1:5000/api/ai/generate-bio', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    // Send headline + skills for a better result
-                    body: JSON.stringify({ name: name, skills: `${headline}, ${skills}` })
+                    body: JSON.stringify({ 
+                        name: name, 
+                        skills: teachSkills, 
+                        headline: headline,
+                        learnSkills: learnSkills 
+                    })
                 });
+                
                 const data = await res.json();
                 if(data.bio) {
                     bioArea.value = data.bio;
                 } else {
                     bioArea.value = originalText;
-                    alert("AI error. Please check your backend terminal.");
+                    alert("AI error. Check server logs.");
                 }
             } catch (e) {
                 bioArea.value = originalText;
-                alert("Connection error. Is your server running?");
+                alert("Connection error.");
             } finally {
                 bioArea.disabled = false;
             }
@@ -278,8 +296,7 @@
                 fullName: currentUserData.fullName,
                 headline: document.getElementById('edit-headline').value,
                 bio: document.getElementById('edit-bio').value,
-                skills: document.getElementById('edit-teach-skills').value,
-                // Ensure learning skills are sent as an array
+                skills: document.getElementById('edit-teach-skills').value, // Used for teaching
                 learnSkills: document.getElementById('edit-learn-skills').value.split(',').map(s=>s.trim()).filter(s=>s)
             };
 
@@ -293,7 +310,7 @@
                 closeEditModal();
                 loadProfileData(myId);
             } else {
-                alert("Failed to save profile changes.");
+                alert("Failed to save changes.");
             }
         };
 

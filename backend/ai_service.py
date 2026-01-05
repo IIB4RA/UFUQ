@@ -1,77 +1,80 @@
-import google.generativeai as genai
+from openai import OpenAI
 import json
 import os
+import random
 
-# ⚠️ تأكد من وضع مفتاحك هنا
-GENAI_API_KEY = "YOUR_API_KEY_HERE"
+# ⚠️ مفتاح OpenAI
+OPENAI_API_KEY = "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"
 
-genai.configure(api_key=GENAI_API_KEY)
+client = OpenAI(api_key=OPENAI_API_KEY)
+
 
 class AIService:
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    # نستخدم الموديل الذكي والسريع
+    model_name = "gpt-4o-mini"
 
     @staticmethod
-    def clean_ai_response(text):
-        """تنظيف النص من رموز الماركداون لتجنب الأخطاء"""
-        return text.replace("```json", "").replace("```", "").strip()
-
-    @staticmethod
-    def generate_bio(name, skills, headline=""):
-        """توليد بايو يعتمد على الاسم، المهارات، والعنوان الوظيفي"""
-        
-        # تحسين البرومبت ليأخذ الـ Headline بعين الاعتبار
-        prompt = f"""
-        Act as a professional profile writer.
-        Write a concise, engaging, and professional bio (max 2 lines) for a user on a mentorship platform.
-        
-        User Details:
-        - Name: {name}
-        - Job Title/Headline: {headline if headline else "Expert"}
-        - Skills: {skills}
-        
-        Instructions:
-        - Focus on how they can help others based on their Headline and Skills.
-        - Do NOT include hashtags.
-        - Write in English only.
-        - Return ONLY the bio text, nothing else.
+    def generate_bio(name, teach_skills, learn_skills, headline=""):
         """
+        توليد بايو باستخدام طبيعة ChatGPT الخام.
+        يعتمد على العشوائية الطبيعية للموديل بدون فلاتر معقدة.
+        """
+
+        # رسالة النظام: نعطيه هوية عامة فقط
+        system_msg = "You are a helpful creative writing assistant."
+
+        # رسالة المستخدم: بسيطة ومباشرة مثل الشات
+        user_msg = f"""
+        I need a professional LinkedIn bio for a user.
+
+        Here is the info:
+        - Name: {name}
+        - Headline: {headline if headline else "Member"}
+        - Teaches: {teach_skills if teach_skills else "General Topics"}
+        - Learns: {learn_skills if learn_skills else "New Things"}
+
+        Task:
+        Write a creative, human-sounding bio (max 2 sentences).
+        Try to find a nice link between what they teach and what they learn.
+
+        Note: Make it sound fresh and different each time I ask.
+        """
+
         try:
-            response = AIService.model.generate_content(prompt)
-            return response.text.strip()
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": user_msg}
+                ],
+                # Temperature 1.0 تعني العشوائية القياسية لـ ChatGPT (مبدع ومتغير)
+                temperature=1.0,
+                max_tokens=150
+            )
+            return response.choices[0].message.content.strip()
         except Exception as e:
-            print(f"AI Bio Error: {e}")
-            return f"Professional mentor specializing in {skills}. Ready to help you achieve your goals."
+            print(f"OpenAI Bio Error: {e}")
+            return f"{headline} | Passionate about {teach_skills} & {learn_skills}."
 
     @staticmethod
     def get_smart_matches(learner_interests, teachers_list):
-        """مطابقة ذكية تعيد بيانات بصيغة JSON حصراً"""
-        if not learner_interests:
-            return []
-
+        # كود المطابقة يبقى كما هو لأنه يحتاج دقة وليس إبداعاً
+        if not learner_interests: return []
         teachers_json = json.dumps(teachers_list)
-        
-        prompt = f"""
-        Act as a matchmaking algorithm. 
-        I have a learner interested in: {learner_interests}.
-        Here is a list of available teachers: {teachers_json}.
-        
-        Task:
-        Select the best 3 matches based on skills overlap.
-        
-        Output Format:
-        You MUST return a valid JSON array strictly like this:
-        [
-            {{"id": "TEACHER_ID", "name": "NAME", "role": "Their Headline or Main Skill", "match_percentage": "95%", "reason": "Why matched"}}
-        ]
-        
-        Constraints:
-        - Return ONLY JSON. No intro text. No markdown.
-        """
+
+        system_msg = "You are a matchmaking engine. Return ONLY valid JSON."
+        user_msg = f"Learner Wants: {learner_interests}\nMentors: {teachers_json}\nFind top 3 matches."
+
         try:
-            response = AIService.model.generate_content(prompt)
-            clean_text = AIService.clean_ai_response(response.text)
-            return json.loads(clean_text)
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "system", "content": system_msg}, {"role": "user", "content": user_msg}],
+                temperature=0.2,
+                response_format={"type": "json_object"}
+            )
+            data = json.loads(response.choices[0].message.content)
+            if "matches" in data: return data["matches"]
+            return []
         except Exception as e:
-            print(f"AI Match Error: {e}")
-            # إرجاع قائمة فارغة بدلاً من تحطيم الموقع
+            print(f"Match Error: {e}")
             return []
