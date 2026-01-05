@@ -232,50 +232,62 @@
         }
 
         async function loadAIMatches() {
+            const container = document.getElementById('ai-matches-container');
+            
             try {
+                // 1. Fetch from Backend
                 const res = await fetch(`http://127.0.0.1:5000/api/ai/matches/${myId}`);
                 const data = await res.json();
-                const container = document.getElementById('ai-matches-container');
+                
+                let matches = data.recommendations;
 
-                // Parse AI Response (Gemini usually returns text, we assume it's JSON formatted string inside)
-                let matches = [];
-                try {
-                    // Clean code blocks if present
-                    const cleanJson = data.recommendations.replace(/```json/g, '').replace(/```/g, '').trim();
-                    matches = JSON.parse(cleanJson);
-                } catch (e) {
-                    console.warn("AI didn't return strict JSON, showing raw or default.");
-                    matches = []; 
+                // 2. ROBUST PARSING (Fixes the issue where AI returns string markdown)
+                if (typeof matches === 'string') {
+                    try {
+                        const cleanJson = matches.replace(/```json/g, '').replace(/```/g, '').trim();
+                        matches = JSON.parse(cleanJson);
+                    } catch (e) {
+                        console.warn("Parsing failed, using empty list");
+                        matches = [];
+                    }
                 }
 
+                // 3. Check for empty results
                 if (!matches || matches.length === 0) {
-                    container.innerHTML = `<p class="col-span-full text-center text-gray-500">No AI recommendations yet. Add learning interests in your profile!</p>`;
+                    container.innerHTML = `
+                        <div class="col-span-full text-center py-8">
+                            <span class="material-symbols-outlined text-4xl text-gray-300 mb-2">sentiment_dissatisfied</span>
+                            <p class="text-gray-500">No matches found yet.</p>
+                            <p class="text-xs text-gray-400 mt-1">Try adding "Learning Skills" in your profile!</p>
+                        </div>`;
                     return;
                 }
 
+                // 4. Render Cards
                 container.innerHTML = matches.slice(0, 3).map(m => `
                     <div class="group relative flex flex-col rounded-2xl bg-white dark:bg-surface-dark border border-gray-100 dark:border-gray-800 p-5 transition-all hover:border-primary/50 hover:shadow-xl hover:shadow-primary/5">
                         <div class="absolute right-4 top-4 flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-1 text-[10px] font-bold text-green-500 uppercase tracking-wider">
-                            <span class="material-symbols-outlined text-[12px]">bolt</span> ${m.match_percentage || '90%'} Match
+                            <span class="material-symbols-outlined text-[12px]">bolt</span> ${m.match_percentage || '95%'}
                         </div>
                         <div class="flex items-center gap-4 mb-4">
-                            <div class="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center text-xl font-bold text-gray-400 border">
-                                ${m.name.charAt(0)}
+                            <div class="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-xl font-bold text-primary border border-primary/20">
+                                ${(m.name || "U").charAt(0)}
                             </div>
                             <div>
-                                <h4 class="font-bold text-gray-900 dark:text-white">${m.name}</h4>
-                                <p class="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase">${m.role || 'Mentor'}</p>
+                                <h4 class="font-bold text-gray-900 dark:text-white line-clamp-1">${m.name}</h4>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase line-clamp-1">${m.role || 'Mentor'}</p>
                             </div>
                         </div>
-                        <p class="text-xs text-gray-500 mb-4 line-clamp-2">${m.reason || 'Matched based on your skills.'}</p>
-                        <button onclick="window.location.href='user_profile.html?id=${m.id}'" class="w-full rounded-xl bg-primary/10 py-2.5 text-xs font-bold text-primary hover:bg-primary hover:text-white transition-all">
+                        <p class="text-xs text-gray-500 mb-4 line-clamp-2 h-8">${m.reason || 'Recommended based on your learning interests.'}</p>
+                        <button onclick="window.location.href='user_profile.html?id=${m.id}'" class="w-full rounded-xl bg-gray-50 dark:bg-gray-800 py-2.5 text-xs font-bold text-gray-600 dark:text-gray-300 hover:bg-primary hover:text-white transition-all">
                             View Profile
                         </button>
                     </div>
                 `).join('');
 
             } catch (e) {
-                document.getElementById('ai-matches-container').innerHTML = `<p class="col-span-full text-center text-red-400 text-sm">AI Service Unavailable</p>`;
+                console.error("AI Display Error:", e);
+                container.innerHTML = `<p class="col-span-full text-center text-red-400 text-sm">Service temporarily unavailable.</p>`;
             }
         }
 
