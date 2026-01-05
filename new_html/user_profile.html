@@ -82,7 +82,6 @@
 
         <div class="flex-1 overflow-y-auto p-6 md:p-8 lg:p-12 space-y-12">
             <div class="flex flex-col lg:flex-row gap-12 max-w-7xl mx-auto">
-
                 <aside class="w-full lg:w-96 flex-shrink-0 flex flex-col gap-8">
                     <div class="bg-surface-light dark:bg-surface-dark rounded-[40px] p-8 shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col items-center text-center relative overflow-hidden">
                         <div class="absolute top-0 left-0 w-full h-32 bg-gradient-to-br from-primary/30 via-primary/10 to-transparent"></div>
@@ -97,7 +96,6 @@
                             <h1 id="profile-name" class="mt-6 text-3xl font-black tracking-tight">Loading...</h1>
                             <p id="profile-headline" class="text-gray-500 dark:text-gray-400 font-medium mt-1">Professional Mentor</p>
                         </div>
-
                         <div class="mt-10 w-full flex flex-col gap-3">
                             <button id="edit-profile-btn" onclick="openEditModal()" class="w-full py-4 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-[20px] font-black text-sm hover:scale-[1.02] transition-all flex items-center justify-center gap-2">
                                 <span class="material-symbols-outlined text-[20px]">edit</span> Edit Profile
@@ -115,7 +113,6 @@
                             Tell the community about your expertise.
                         </p>
                     </div>
-
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div>
                             <h3 class="text-xl font-black mb-6 flex items-center gap-3">
@@ -143,13 +140,12 @@
                     <span class="material-symbols-outlined">close</span>
                 </button>
             </div>
-
+            
             <form id="edit-form" class="space-y-6">
                 <div>
                     <label class="block text-xs font-black uppercase text-gray-400 mb-2 ml-1">Profile Headline</label>
                     <input type="text" id="edit-headline" class="w-full rounded-2xl border-gray-100 dark:bg-gray-800 dark:border-gray-700 p-4 outline-none transition-all dark:text-white" placeholder="e.g. Senior Designer">
                 </div>
-
                 <div>
                     <div class="flex justify-between items-center mb-2">
                         <label class="block text-xs font-black uppercase text-gray-400 ml-1">Biography</label>
@@ -160,7 +156,6 @@
                     </div>
                     <textarea id="edit-bio" rows="4" class="w-full rounded-2xl border-gray-100 dark:bg-gray-800 dark:border-gray-700 p-4 outline-none transition-all resize-none dark:text-white" placeholder="Tell us about yourself..."></textarea>
                 </div>
-
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label class="block text-xs font-black uppercase text-gray-400 mb-2 ml-1">Teaching (Skills)</label>
@@ -171,7 +166,6 @@
                         <input type="text" id="edit-learn-skills" class="w-full rounded-2xl border-gray-100 dark:bg-gray-800 dark:border-gray-700 p-4 outline-none dark:text-white" placeholder="Piano, Karate">
                     </div>
                 </div>
-
                 <div class="pt-6 flex gap-4">
                     <button type="button" onclick="closeEditModal()" class="flex-1 py-4 font-black text-gray-500">Cancel</button>
                     <button type="submit" class="flex-[2] py-4 bg-primary text-white rounded-3xl font-black shadow-xl hover:scale-[1.02] transition-all">Save Changes</button>
@@ -195,7 +189,6 @@
                 document.getElementById('edit-profile-btn').classList.add('hidden');
                 document.getElementById('photo-upload-btn').classList.add('hidden');
             }
-
             await loadProfileData(profileId);
         });
 
@@ -209,7 +202,7 @@
                 document.getElementById('sidebar-name-small').innerText = user.fullName;
                 document.getElementById('profile-headline').innerText = user.headline || "Passionate Skill Swapper";
                 document.getElementById('profile-bio').innerText = user.bio || "This user hasn't added a bio yet.";
-
+                
                 const pic = user.profilePicture || "https://i.pravatar.cc/150";
                 document.getElementById('profile-avatar').src = pic;
                 document.getElementById('sidebar-avatar-small').src = pic;
@@ -219,37 +212,39 @@
             } catch (err) { console.error(err); }
         }
 
-        // --- POINT 3: AI PROFILE DOCTOR LOGIC ---
+        // IMPROVED AI DOCTOR: Reads current inputs dynamically
         async function fixMyBio() {
             const bioArea = document.getElementById('edit-bio');
             const skills = document.getElementById('edit-teach-skills').value;
+            const headline = document.getElementById('edit-headline').value;
             const name = currentUserData.fullName;
 
-            if (!skills) {
-                alert("Please add some skills first so the AI knows what you teach!");
+            if (!skills && !headline) {
+                alert("Please add some skills or a headline so the AI knows what you do!");
                 return;
             }
 
             const originalText = bioArea.value;
-            bioArea.value = "AI Doctor is writing your professional bio... ✨";
+            bioArea.value = "AI Doctor is writing your new bio... ✨";
             bioArea.disabled = true;
 
             try {
                 const res = await fetch('http://127.0.0.1:5000/api/ai/generate-bio', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: name, skills: skills })
+                    // Send headline + skills for a better result
+                    body: JSON.stringify({ name: name, skills: `${headline}, ${skills}` })
                 });
                 const data = await res.json();
                 if(data.bio) {
                     bioArea.value = data.bio;
                 } else {
                     bioArea.value = originalText;
-                    alert("AI error. Try again later.");
+                    alert("AI error. Please check your backend terminal.");
                 }
             } catch (e) {
                 bioArea.value = originalText;
-                alert("Connection error.");
+                alert("Connection error. Is your server running?");
             } finally {
                 bioArea.disabled = false;
             }
@@ -283,21 +278,23 @@
                 fullName: currentUserData.fullName,
                 headline: document.getElementById('edit-headline').value,
                 bio: document.getElementById('edit-bio').value,
-                skills: document.getElementById('edit-teach-skills').value
-            };
-            // Added support for learningSkills in the update request
-            const updatePayload = {
-                ...data,
-                learnSkills: document.getElementById('edit-learn-skills').value.split(',').map(s=>s.trim())
+                skills: document.getElementById('edit-teach-skills').value,
+                // Ensure learning skills are sent as an array
+                learnSkills: document.getElementById('edit-learn-skills').value.split(',').map(s=>s.trim()).filter(s=>s)
             };
 
-            await fetch(`http://127.0.0.1:5000/api/users/${myId}`, {
+            const res = await fetch(`http://127.0.0.1:5000/api/users/${myId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(updatePayload)
+                body: JSON.stringify(data)
             });
-            closeEditModal();
-            loadProfileData(myId);
+
+            if (res.ok) {
+                closeEditModal();
+                loadProfileData(myId);
+            } else {
+                alert("Failed to save profile changes.");
+            }
         };
 
         document.getElementById('profile-upload').onchange = async (e) => {
