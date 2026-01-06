@@ -6,12 +6,12 @@ from flask_cors import CORS
 from bson import ObjectId
 from datetime import datetime, timezone
 from werkzeug.utils import secure_filename
-from ai_service import AIService  # تأكد من وجود ملف ai_service.py بجانب هذا الملف
+from ai_service import AIService 
 
 # ======================
 # DATABASE SETUP
 # ======================
-from db import users_col, db 
+from db import users_col, db, sessions_col
 
 posts_col = db["posts"]
 bookings_col = db["bookings"]
@@ -28,7 +28,6 @@ UPLOAD_FOLDER = 'static/uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
-# ضع مفتاح Whereby الخاص بك هنا
 WHEREBY_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2FjY291bnRzLmFwcGVhci5pbiIsImF1ZCI6Imh0dHBzOi8vYXBpLmFwcGVhci5pbi92MSIsImV4cCI6OTAwNzE5OTI1NDc0MDk5MSwiaWF0IjoxNzY3NDUxNzE0LCJvcmdhbml6YXRpb25JZCI6MzMyMTI2LCJqdGkiOiIyYzNmMTZlYS1iM2YxLTRiOGQtYTJkMC03ODhhNzM5ZGNiODUifQ.nkaUDATWwDiKj_LVCkqHYS-eDq43WcsQN1NMxE-jpfw"
 
 if not os.path.exists(UPLOAD_FOLDER):
@@ -36,6 +35,19 @@ if not os.path.exists(UPLOAD_FOLDER):
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def serialize_doc(doc):
+    """Helper to convert MongoDB objects to JSON serializable formats."""
+    if not doc: return None
+    if isinstance(doc, list): return [serialize_doc(item) for item in doc]
+    if isinstance(doc, dict):
+        new_doc = {}
+        for key, value in doc.items():
+            if isinstance(value, ObjectId): new_doc[key] = str(value)
+            elif isinstance(value, datetime): new_doc[key] = value.isoformat()
+            else: new_doc[key] = value
+        return new_doc
+    return doc
 
 # ======================
 # 1. VIDEO SESSION ROUTES
@@ -128,7 +140,6 @@ def update_user(user_id):
     if "headline" in data: update_data["headline"] = data["headline"]
     if "bio" in data: update_data["bio"] = data["bio"]
     if "skills" in data: update_data["skillTags"] = [s.strip() for s in data["skills"].split(",") if s.strip()]
-    # إضافة دعم لل Learning Skills
     if "learnSkills" in data: update_data["learningSkills"] = data["learnSkills"]
 
     if update_data:
@@ -150,18 +161,14 @@ def upload_file(user_id):
     return jsonify({"error": "File type error"}), 400
 
 # ======================
-# 3. SEARCH & SKILLS (FIXED FOR TEACH SKILL)
+# 3. SEARCH & SKILLS
 # ======================
 @app.route("/api/search")
 def search_users():
     skill_query = request.args.get("skill", "").strip()
-    
-    # إصلاح البحث: التأكد من البحث داخل skillTags للمعلمين
     if not skill_query:
-        # إذا البحث فارغ، جلب جميع المعلمين
         users = list(users_col.find({"roles": "teacher"}, {"passwordHash": 0}))
     else:
-        # استخدام Regex للبحث غير الحساس لحالة الأحرف
         regex_pattern = {"$regex": skill_query, "$options": "i"}
         users = list(users_col.find({"skillTags": regex_pattern, "roles": "teacher"}, {"passwordHash": 0}))
     
@@ -174,24 +181,60 @@ def get_all_teachers():
     for t in teachers: t["_id"] = str(t["_id"])
     return jsonify(teachers)
 
-# هذه الدالة هي المسؤولة عن زر Publish Skill وتحديث بياناتك لتظهر في البحث
 @app.route("/api/teach-skill", methods=["POST"])
 def publish_skill():
-    data = request.json
-    user_id = data.get("userId")
-    new_skill = data.get("skillName")
+    try:
+        data = request.json
+        user_id = data.get("userId")
+        skill_name = data.get("skillName")
+        selected_category = data.get("category", "Other")
 
-    if not user_id or not new_skill:
-        return jsonify({"error": "Missing info"}), 400
+        if not user_id or not skill_name:
+            return jsonify({"error": "Missing info"}), 400
 
-    # إضافة المهارة وتفعيل دور المعلم فوراً
-    users_col.update_one(
-        {"_id": ObjectId(user_id)},
-        {
-            "$addToSet": {"skillTags": new_skill, "roles": "teacher"} 
+        user = users_col.find_one({"_id": ObjectId(user_id)})
+        
+        new_session = {
+            "learner": user_id, 
+            "teacher": user_id, 
+            "skill": skill_name, 
+            "status": "active", 
+            "teacherName": user.get("fullName"),
+            "teacherPic": user.get("profilePicture"),
+            "category": selected_category,
+            "createdAt": datetime.now(timezone.utc)
         }
-    )
-    return jsonify({"message": "Skill published successfully!"}), 200
+        
+        sessions_col.insert_one(new_session)
+        users_col.update_one(
+            {"_id": ObjectId(user_id)},
+            {"$addToSet": {"skillTags": skill_name, "roles": "teacher"}}
+        )
+        return jsonify({"message": "Success", "category": selected_category}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/sessions/explore")
+def explore_all_sessions():
+    try:
+        query_text = request.args.get("skill", "").strip()
+        category_filter = request.args.get("category", "All")
+        db_query = {}
+        if category_filter != "All":
+            db_query["category"] = category_filter
+        if query_text:
+            db_query["skill"] = {"$regex": query_text, "$options": "i"}
+            
+        sessions = list(sessions_col.find(db_query).sort("createdAt", -1))
+        for s in sessions:
+            s["_id"] = str(s["_id"])
+            s["skill"] = s.get("skill", "Untitled Expertise")
+            s["teacherName"] = s.get("teacherName", "Mentor")
+            s["teacherPic"] = s.get("teacherPic", "https://i.pravatar.cc/150")
+            
+        return jsonify(serialize_doc(sessions))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # ======================
 # 4. COMMUNITY & POSTS
@@ -242,7 +285,7 @@ def update_wallet():
     tx_type = "deposit" if int(amount) > 0 else "payment"
     transactions_col.insert_one({
         "user": ObjectId(user_id), "type": tx_type, "amount": int(amount),
-        "description": data.get("description", "Balance Update"), "date": datetime.now(timezone.utc).strftime("%b %d, %Y")
+        "description": data.get("description", "Balance Update"), "timestamp": datetime.now(timezone.utc)
     })
     return jsonify({"message": "Transaction successful"}), 200
 
@@ -263,25 +306,14 @@ def get_history(user_id):
     transactions = list(db.transactions.find({
         "$or": [{"learnerId": user_id}, {"teacherId": user_id}, {"user": ObjectId(user_id)}]
     }).sort("timestamp", -1))
-    
     history = []
     for t in transactions:
-        # التعامل مع النوعين (Wallet Update أو Skill Swap)
         desc = t.get("description", "Transaction")
-        date_str = t["timestamp"].strftime("%Y-%m-%d") if isinstance(t.get("timestamp"), datetime) else t.get("date", "N/A")
-        
-        # تحديد الإشارة (+ أو -)
+        date_str = t["timestamp"].strftime("%Y-%m-%d") if isinstance(t.get("timestamp"), datetime) else "N/A"
         amt = t.get("amount", 0)
         if t.get("type") == "skill_swap" and str(t.get("learnerId")) == user_id:
             amt = -amt
-        elif t.get("type") == "payment":
-             pass # المبلغ محدد سابقاً
-        
-        history.append({
-            "description": desc,
-            "date": date_str,
-            "amount": amt
-        })
+        history.append({"description": desc, "date": date_str, "amount": amt})
     return jsonify(history)
 
 # ======================
@@ -348,93 +380,43 @@ def get_user_bookings(user_id):
     for b in bookings: b["_id"] = str(b["_id"])
     return jsonify(bookings)
 
-# ==========================================
-# استبدل دالة update_booking_status بهذه النسخة المصححة
-# ==========================================
 @app.route("/api/bookings/<booking_id>/status", methods=["PUT"])
 def update_booking_status(booking_id):
     try:
         data = request.json
         new_status = data.get("status")
-        
-        # تحويل Booking ID
-        if not ObjectId.is_valid(booking_id):
-            return jsonify({"error": "Invalid ID format"}), 400
+        if not ObjectId.is_valid(booking_id): return jsonify({"error": "Invalid ID format"}), 400
         
         booking_oid = ObjectId(booking_id)
         booking = bookings_col.find_one({"_id": booking_oid})
-        
-        if not booking: 
-            return jsonify({"error": "Booking not found"}), 404
+        if not booking: return jsonify({"error": "Booking not found"}), 404
 
-        # منطق القبول (Accept)
         if new_status == "confirmed" and booking.get("status") == "pending":
             learner_id_str = booking.get("learnerId")
             teacher_id_str = booking.get("teacherId")
-
             if not learner_id_str or not teacher_id_str:
                 return jsonify({"error": "Missing IDs in booking"}), 400
 
-            # تحويل IDs المستخدمين إلى ObjectId لضمان قبول MongoDB لها
             learner_oid = ObjectId(learner_id_str)
             teacher_oid = ObjectId(teacher_id_str)
-
-            # التحقق من الرصيد
             learner = users_col.find_one({"_id": learner_oid})
             if not learner: return jsonify({"error": "Learner not found"}), 404
-                
-            if learner.get("creditBalance", 0) < 1:
-                return jsonify({"error": "Student has 0 credits!"}), 400
+            if learner.get("creditBalance", 0) < 1: return jsonify({"error": "Student has 0 credits!"}), 400
 
-            # 1. خصم من الطالب
             users_col.update_one({"_id": learner_oid}, {"$inc": {"creditBalance": -1}})
-            
-            # 2. إضافة للمعلم
             users_col.update_one({"_id": teacher_oid}, {"$inc": {"creditBalance": 1}})
             
-            # 3. تسجيل العملية (هنا كان يحدث الخطأ غالباً)
-            # نقوم بإدخال البيانات بالشكل الصحيح (ObjectIds) لتجاوز الـ Validation
-            transaction_doc = {
-                "learnerId": learner_id_str, # نخزنها كنص للعرض السهل
-                "teacherId": teacher_id_str,
-                "user": learner_oid, # ربط مرجعي بـ ObjectId (مهم لقواعد البيانات الصارمة)
-                "amount": 1, 
-                "timestamp": datetime.now(timezone.utc), 
-                "type": "skill_swap",
-                "description": f"Session: {booking.get('skill', 'Unknown')}"
-            }
-            
-            # محاولة الإدخال - إذا فشلت بسبب الـ Validation نتجاوزها
             try:
-                transactions_col.insert_one(transaction_doc)
-            except Exception as e:
-                print(f"Transaction Log Error (Ignored): {e}")
-                # نكمل الكود حتى لو فشل تسجيل العملية، المهم الأرصدة تغيرت
+                transactions_col.insert_one({
+                    "learnerId": learner_id_str, "teacherId": teacher_id_str,
+                    "user": learner_oid, "amount": 1, "timestamp": datetime.now(timezone.utc),
+                    "type": "skill_swap", "description": f"Session: {booking.get('skill', 'Unknown')}"
+                })
+            except Exception as e: print(f"Transaction Log Error: {e}")
 
-        # تحديث حالة الحجز
         bookings_col.update_one({"_id": booking_oid}, {"$set": {"status": new_status}})
         return jsonify({"message": f"Success! Session is {new_status}"}), 200
-
-    except Exception as e:
-        print(f"❌ SERVER ERROR: {e}")
-        return jsonify({"error": f"Database Validation Error: {str(e)}"}), 500
-
-        # 3. تحديث الحالة النهائية
-        bookings_col.update_one({"_id": ObjectId(booking_id)}, {"$set": {"status": new_status}})
-        return jsonify({"message": f"Success! Status changed to {new_status}"}), 200
-
-    except Exception as e:
-        # طباعة الخطأ الكامل في التيرمينال لنعرف السبب
-        print(f"❌ SERVER ERROR: {str(e)}")
-        return jsonify({"error": f"Server Error: {str(e)}"}), 500
-
-        # 3. تحديث حالة الحجز
-        bookings_col.update_one({"_id": ObjectId(booking_id)}, {"$set": {"status": new_status}})
-        return jsonify({"message": f"Booking updated to {new_status}"}), 200
-
-    except Exception as e:
-        print(f"Server Error in Update Status: {e}") # طباعة الخطأ في التيرمينال
-        return jsonify({"error": str(e)}), 500
+    except Exception as e: return jsonify({"error": str(e)}), 500
 
 @app.route("/api/bookings/<booking_id>/finish", methods=["PUT"])
 def finish_booking(booking_id):
@@ -457,10 +439,7 @@ def submit_review():
 # ======================
 @app.route("/api/leaderboard", methods=["GET"])
 def get_leaderboard():
-    top_teachers = list(users_col.find(
-        {"roles": "teacher"},
-        {"fullName": 1, "ratingAvg": 1, "totalReviews": 1, "profilePicture": 1, "skillTags": 1}
-    ).sort("ratingAvg", -1).limit(5))
+    top_teachers = list(users_col.find({"roles": "teacher"}, {"fullName": 1, "ratingAvg": 1, "totalReviews": 1, "profilePicture": 1, "skillTags": 1}).sort("ratingAvg", -1).limit(5))
     for t in top_teachers: t["_id"] = str(t["_id"])
     return jsonify(top_teachers), 200
 
@@ -470,26 +449,10 @@ def get_admin_stats():
         total_users = users_col.count_documents({})
         active_sessions_query = {"status": {"$in": ["confirmed", "ready"]}}
         active_sessions_count = db.bookings.count_documents(active_sessions_query)
-        
         pipeline = [{"$group": {"_id": None, "total": {"$sum": "$creditBalance"}}}]
         total_credits_res = list(users_col.aggregate(pipeline))
         total_credits = total_credits_res[0]["total"] if total_credits_res else 0
-        
-        active_sessions_list = list(db.bookings.find(active_sessions_query).sort("createdAt", -1).limit(10))
-        for s in active_sessions_list: s["_id"] = str(s["_id"])
-
-        recent_users = list(users_col.find().sort("createdAt", -1).limit(5))
-        for u in recent_users:
-            u["_id"] = str(u["_id"])
-            if "passwordHash" in u: del u["passwordHash"]
-
-        return jsonify({
-            "totalUsers": total_users,
-            "totalBookings": active_sessions_count,
-            "totalPlatformCredits": total_credits,
-            "activeSessions": active_sessions_list,
-            "recentUsers": recent_users
-        }), 200
+        return jsonify({"totalUsers": total_users, "totalBookings": active_sessions_count, "totalPlatformCredits": total_credits}), 200
     except Exception as e: return jsonify({"error": str(e)}), 500
 
 @app.route("/api/admin/users/<user_id>", methods=["DELETE"])
@@ -507,7 +470,6 @@ def social_login():
     data = request.json
     email = data.get("email")
     user = users_col.find_one({"email": email})
-
     if not user:
         new_user = {
             "fullName": data.get("name"), "email": email, "profilePicture": data.get("picture"),
@@ -520,63 +482,39 @@ def social_login():
     else:
         user_id = str(user["_id"])
         credits, roles, pic, name = user.get("creditBalance", 0), user.get("roles", ["learner"]), user.get("profilePicture"), user.get("fullName")
-
     return jsonify({"status": "success", "userId": user_id, "fullName": name, "profilePicture": pic, "creditBalance": credits, "roles": roles})
 
 # ======================
-# AI ROUTES (UPDATED)
+# 10. AI ROUTES (Unified & Smart)
 # ======================
 @app.route("/api/ai/matches/<user_id>")
 def get_ai_matches(user_id):
     try:
         user = users_col.find_one({"_id": ObjectId(user_id)})
-        # نرسل اهتمامات التعلم + المهارات الحالية للمساعدة في المطابقة
         interests = user.get("learningSkills", []) + user.get("skillTags", [])
-        
-        # جلب المعلمين (نستثني المستخدم نفسه)
         teachers = list(users_col.find({"roles": "teacher", "_id": {"$ne": ObjectId(user_id)}}))
-        
-        # تجهيز البيانات للـ AI
-        teachers_data = [{
-            "id": str(t["_id"]), 
-            "name": t["fullName"], 
-            "skills": t.get("skillTags", []),
-            "headline": t.get("headline", "Mentor")
-        } for t in teachers]
-        
-        # استدعاء الـ AI
+        teachers_data = [{"id": str(t["_id"]), "name": t["fullName"], "skills": t.get("skillTags", []), "headline": t.get("headline", "Mentor")} for t in teachers]
         recommendations = AIService.get_smart_matches(interests, teachers_data)
-        
-        # خدعة: إذا فشل الـ AI أو لم يجد نتائج، نرجع أي معلم عشوائي مؤقتاً
-        if not recommendations and teachers_data:
-            t = teachers_data[0]
-            recommendations = [{
-                "id": t["id"], "name": t["name"], "role": "Mentor", 
-                "match_percentage": "85%", "reason": "Recommended based on community popularity."
-            }]
-
-        return jsonify({"recommendations": recommendations}) # نرجع المصفوفة مباشرة
-        
-    except Exception as e:
-        print(f"Match Route Error: {e}")
-        return jsonify({"recommendations": []})
+        return jsonify({"recommendations": recommendations})
+    except Exception as e: return jsonify({"recommendations": []})
 
 @app.route("/api/ai/generate-bio", methods=["POST"])
-def ai_generate_bio():
-    data = request.json
-    name = data.get("name")
-    skills = data.get("skills")
-    headline = data.get("headline", "") # استقبال العنوان الوظيفي
-
-    if not name or not skills:
-        return jsonify({"error": "Missing data"}), 400
-
+def ai_generate_bio_final():
     try:
-        # نمرر العنوان الوظيفي للدالة
-        new_bio = AIService.generate_bio(name, skills, headline)
-        return jsonify({"bio": new_bio})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        data = request.json
+        user_id = data.get("userId")
+        user = users_col.find_one({"_id": ObjectId(user_id)})
+        if not user: return jsonify({"error": "User not found"}), 404
+
+        name = user.get("fullName")
+        headline = user.get("headline", "")
+        teach_skills = ", ".join(user.get("skillTags", []))
+        learn_skills = ", ".join(user.get("learningSkills", []))
+
+        new_bio = AIService.generate_bio(name, teach_skills, learn_skills, headline)
+        users_col.update_one({"_id": ObjectId(user_id)}, {"$set": {"bio": new_bio}})
+        return jsonify({"bio": new_bio}), 200
+    except Exception as e: return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0', port=5000)
